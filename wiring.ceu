@@ -1,0 +1,74 @@
+input void TICK;
+
+// The point is not some digital logic simulation,
+// but how to use Ceu's facilities for abstraction.
+
+// all nodes but the "top" nodes implement an interface
+interface Gate with
+  event void ok;
+  var bool value;
+end
+
+// "bottom" nodes do not have references to nodes
+class Clock with
+  interface Gate;
+do
+  every TICK do
+    this.value = not this.value;
+    emit this.ok;
+  end
+end
+
+// "middle" nodes have one or more references
+class And with
+  interface Gate;
+  var Gate& left;
+  var Gate& right;
+do
+  par do
+    every left.ok do
+      if (left.value and right.value) != this.value then
+        this.value = left.value and right.value;
+        emit this.ok;
+      end
+    end
+  with
+    every right.ok do
+      if (left.value and right.value) != this.value then
+        this.value = left.value and right.value;
+        emit this.ok;
+      end
+    end
+  end
+end
+
+// "top" nodes have references,
+// but don't implement 
+class Display with
+  var Gate& to_display;
+do
+  every to_display.ok do
+    if to_display.value then
+      _printf("true\n");
+    else
+      _printf("false\n");
+    end
+  end
+end
+
+// Build the pipeline in topological-sort order.
+var Clock c;
+var And a with
+  this.left = c;
+  this.right = c;
+end;
+var Display d with
+  this.to_display = a;
+end;
+// There is an issue (that I do not fully understand yet),
+// with glitches caused by the lack of a par/hor,
+// but I think Ceu is usable even without par/hor.
+
+await FOREVER;
+
+
